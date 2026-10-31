@@ -6,10 +6,14 @@ weiter. Der API-Schlüssel bleibt dabei auf deinem Rechner und landet nie im Bro
 
 Start:  python3 server.py
 Dann im Browser öffnen: http://localhost:8000
+
+Auf Render (render.com) läuft dieselbe Datei. Einstellungen kommen dort aus
+Umgebungsvariablen statt aus .env (siehe README.md).
 """
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -18,18 +22,6 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PORT = int(os.environ.get("PORT", "8000"))
-SERPAPI_URL = "https://serpapi.com/search.json"
-CACHE_SECONDS = 30 * 60  # gleiche Suche 30 Minuten lang nicht erneut abrufen (spart Kontingent)
-
-# Nur diese Parameter dürfen vom Browser an SerpApi durchgereicht werden.
-ALLOWED_PARAMS = {
-    "departure_id", "arrival_id", "outbound_date", "return_date", "type",
-    "travel_class", "adults", "children", "infants_in_seat", "infants_on_lap",
-    "currency", "hl", "gl", "stops", "sort_by", "departure_token", "deep_search",
-}
-
-_cache = {}
 
 
 def load_env_file():
@@ -43,6 +35,54 @@ def load_env_file():
             continue
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_env_file()
+
+ON_RENDER = bool(os.environ.get("RENDER"))  # setzt Render automatisch
+HOST = os.environ.get("HOST", "0.0.0.0" if ON_RENDER else "127.0.0.1")
+PORT = int(os.environ.get("PORT", "8000"))
+SERPAPI_URL = "https://serpapi.com/search.json"
+CACHE_SECONDS = 30 * 60  # gleiche Suche 30 Minuten lang nicht erneut abrufen (spart Kontingent)
+
+# Schutz für dein SerpApi-Kontingent, wenn die Seite öffentlich ist (0 = kein Limit).
+# Gespeicherte Suchen aus dem Zwischenspeicher zählen nicht mit.
+HOURLY_LIMIT = int(os.environ.get("SEARCHES_PER_HOUR", "20"))  # pro Besucher
+DAILY_LIMIT = int(os.environ.get("SEARCHES_PER_DAY", "8" if ON_RENDER else "0"))  # für alle zusammen
+
+# Nur diese Parameter dürfen vom Browser an SerpApi durchgereicht werden.
+ALLOWED_PARAMS = {
+    "departure_id", "arrival_id", "outbound_date", "return_date", "type",
+    "travel_class", "adults", "children", "infants_in_seat", "infants_on_lap",
+    "currency", "hl", "gl", "stops", "sort_by", "departure_token", "deep_search",
+}
+
+_cache = {}
+_limit_lock = threading.Lock()
+_searches_by_visitor = {}  # IP-Adresse -> Zeitpunkte der letzten Suchen
+_daily = {"date": None, "count": 0}
+
+
+def check_limits(visitor):
+    """Gibt eine Fehlermeldung zurück, wenn ein Limit erreicht ist, sonst None (und zählt die Suche)."""
+    now = time.time()
+    with _limit_lock:
+        today = time.strftime("%Y-%m-%d")
+        if _daily["date"] != today:
+            _daily.update(date=today, count=0)
+            _searches_by_visitor.clear()  # alte Einträge einmal am Tag aufräumen
+        if DAILY_LIMIT and _daily["count"] >= DAILY_LIMIT:
+            return "Das Tageslimit für Live-Suchen ist erreicht. Morgen geht es weiter."
+
+        recent = [t for t in _searches_by_visitor.get(visitor, []) if now - t < 3600]
+        if HOURLY_LIMIT and len(recent) >= HOURLY_LIMIT:
+            _searches_by_visitor[visitor] = recent
+            return f"Du hast das Limit von {HOURLY_LIMIT} Suchen pro Stunde erreicht. Bitte versuch es später noch einmal."
+
+        recent.append(now)
+        _searches_by_visitor[visitor] = recent
+        _daily["count"] += 1
+    return None
 
 
 def api_key():
@@ -88,6 +128,10 @@ class Handler(SimpleHTTPRequestHandler):
         if cached and time.time() - cached[0] < CACHE_SECONDS:
             return self.send_json(200, cached[1])
 
+        limit_message = check_limits(self.visitor_ip())
+        if limit_message:
+            return self.send_json(429, {"error": limit_message, "limited": True})
+
         url = SERPAPI_URL + "?" + urllib.parse.urlencode({**params, "engine": "google_flights", "api_key": key})
         try:
             with urllib.request.urlopen(url, timeout=60) as response:
@@ -105,6 +149,14 @@ class Handler(SimpleHTTPRequestHandler):
             _cache[cache_key] = (time.time(), data)
         return self.send_json(200, data)
 
+    def visitor_ip(self):
+        # Auf Render steht die echte Besucher-Adresse im Header X-Forwarded-For
+        if ON_RENDER:
+            forwarded = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            if forwarded:
+                return forwarded
+        return self.client_address[0]
+
     def send_json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -115,11 +167,13 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
-    load_env_file()
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
     mode = "Live-Preise über SerpApi" if api_key() else "Beispieldaten (kein SerpApi-Schlüssel in .env)"
-    print(f"Flugsuche läuft auf http://localhost:{PORT}  –  {mode}")
-    print("Beenden mit Strg+C")
+    limits = f"Limits: {HOURLY_LIMIT or 'unbegrenzt'} Suchen/Stunde pro Besucher, {DAILY_LIMIT or 'unbegrenzt'} Suchen/Tag insgesamt"
+    print(f"Flugsuche läuft auf http://localhost:{PORT}  –  {mode}", flush=True)
+    print(limits, flush=True)
+    if not ON_RENDER:
+        print("Beenden mit Strg+C", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

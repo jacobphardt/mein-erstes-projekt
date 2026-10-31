@@ -34,6 +34,40 @@ Oben rechts steht jetzt **Live-Preise** statt **Beispieldaten**.
 - Willst du trotz Schlüssel Beispieldaten sehen (z. B. beim Basteln am Design), stell in `js/config.js` `provider: "mock"` ein.
 - Bei Hin- und Rückflügen zeigt Google Flights zuerst die Hinflüge mit dem günstigsten Gesamtpreis. Über **Rückflüge** lädst du die passenden Rückflüge nach.
 
+## Im Internet veröffentlichen (Render)
+
+[Render](https://render.com) startet `server.py` für dich im Internet. In der kostenlosen Stufe schläft die Seite nach 15 Minuten ohne Besucher ein. Der erste Aufruf danach dauert etwa eine Minute.
+
+1. Auf https://render.com mit deinem GitHub-Konto anmelden.
+2. **New → Web Service** wählen und das Repository `mein-erstes-projekt` verbinden.
+3. Folgendes eintragen:
+
+   | Feld | Wert |
+   |---|---|
+   | Name | z. B. `flugfinder` (wird Teil der Adresse) |
+   | Branch | `main` |
+   | Root Directory | `flugsuche` |
+   | Language / Runtime | `Python 3` |
+   | Build Command | `echo "Kein Build nötig"` |
+   | Start Command | `python server.py` |
+   | Instance Type | `Free` |
+
+4. Unter **Environment Variables** `SERPAPI_KEY` mit deinem Schlüssel anlegen. Der Schlüssel gehört nur hierher, nie in eine Datei auf GitHub.
+5. **Deploy Web Service** klicken. Nach ein paar Minuten ist die Seite unter `https://<name>.onrender.com` erreichbar.
+
+Jeder `git push` auf `main` veröffentlicht automatisch die neue Version.
+
+### Suchlimits
+
+Auf einer öffentlichen Seite kann jeder suchen, und jede Suche verbraucht dein SerpApi-Kontingent. Deshalb begrenzt `server.py` die Suchen. Suchen aus dem 30-Minuten-Zwischenspeicher zählen nicht mit.
+
+| Umgebungsvariable | Bedeutung | Standard auf Render | Standard lokal |
+|---|---|---|---|
+| `SEARCHES_PER_DAY` | Live-Suchen pro Tag für alle Besucher zusammen | `8` (≈ 250 pro Monat) | unbegrenzt |
+| `SEARCHES_PER_HOUR` | Live-Suchen pro Stunde und Besucher | `20` | `20` |
+
+`0` bedeutet unbegrenzt. Mit einem größeren SerpApi-Paket kannst du `SEARCHES_PER_DAY` auf Render einfach höher setzen. Die Zähler starten bei jedem Neustart des Servers neu, zum Beispiel wenn er auf Render einschläft. Das Limit ist also ein Schutz, aber keine exakte Abrechnung.
+
 ## Aufbau
 
 ```

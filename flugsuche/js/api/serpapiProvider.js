@@ -51,6 +51,7 @@ async function request(params) {
     // Google findet nichts → leere Liste statt Fehlermeldung
     if (/hasn't returned any results|no results/i.test(data.error)) return {};
     if (response.status === 401) throw new Error("Der SerpApi-Schlüssel ist ungültig. Prüfe die Datei .env.");
+    if (data.limited) throw new Error(data.error); // Suchlimit von server.py
     if (response.status === 429) throw new Error("Dein SerpApi-Kontingent ist aufgebraucht oder du suchst zu schnell hintereinander.");
     throw new Error(`SerpApi: ${data.error}`);
   }
