@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flugfinder – günstige Flüge finden</title>
+  <meta name="description" content="Vergleiche Flugpreise und finde den günstigsten und schnellsten Flug.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="./"><span class="logo-icon" aria-hidden="true">✈</span> Flugfinder</a>
+      <span id="provider-badge" class="provider-badge" hidden></span>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <h1>Finde den günstigsten Flug</h1>
+      <p class="hero-sub">Preise vergleichen, filtern und sofort sehen, welcher Flug am günstigsten und welcher am schnellsten ist.</p>
+
+      <form id="search-form" class="search-card" novalidate>
+        <div class="trip-type" role="radiogroup" aria-label="Reiseart">
+          <label><input type="radio" name="tripType" value="roundtrip" checked><span>Hin &amp; Rück</span></label>
+          <label><input type="radio" name="tripType" value="oneway"><span>Nur Hinflug</span></label>
+        </div>
+
+        <div class="form-grid">
+          <div class="route">
+            <div class="field">
+              <label for="from">Von</label>
+              <div class="ac">
+                <input id="from" type="text" placeholder="Stadt oder Flughafen" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
+            <button type="button" class="swap-btn" id="swap-btn" aria-label="Abflug und Ziel tauschen" title="Tauschen">⇄</button>
+            <div class="field">
+              <label for="to">Nach</label>
+              <div class="ac">
+                <input id="to" type="text" placeholder="Stadt oder Flughafen" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
+          </div>
+
+          <div class="field field-depart">
+            <label for="depart">Hinflug</label>
+            <input id="depart" type="date" required>
+          </div>
+          <div class="field field-return" id="return-field">
+            <label for="return">Rückflug</label>
+            <input id="return" type="date">
+          </div>
+
+          <div class="field field-pax">
+            <label for="pax-toggle">Reisende</label>
+            <button type="button" id="pax-toggle" class="pax-toggle" aria-expanded="false" aria-controls="pax-popover">1 Erwachsener</button>
+            <div class="pax-popover" id="pax-popover" hidden>
+              <div class="pax-row" data-type="adults">
+                <div><strong>Erwachsene</strong><small>ab 12 Jahren</small></div>
+                <div class="stepper">
+                  <button type="button" data-step="-1" aria-label="Erwachsene verringern">−</button>
+                  <output>1</output>
+                  <button type="button" data-step="1" aria-label="Erwachsene erhöhen">+</button>
+                </div>
+              </div>
+              <div class="pax-row" data-type="children">
+                <div><strong>Kinder</strong><small>2–11 Jahre</small></div>
+                <div class="stepper">
+                  <button type="button" data-step="-1" aria-label="Kinder verringern">−</button>
+                  <output>0</output>
+                  <button type="button" data-step="1" aria-label="Kinder erhöhen">+</button>
+                </div>
+              </div>
+              <div class="pax-row" data-type="infants">
+                <div><strong>Babys</strong><small>unter 2 Jahren, auf dem Schoß</small></div>
+                <div class="stepper">
+                  <button type="button" data-step="-1" aria-label="Babys verringern">−</button>
+                  <output>0</output>
+                  <button type="button" data-step="1" aria-label="Babys erhöhen">+</button>
+                </div>
+              </div>
+              <p class="pax-hint" id="pax-hint">Maximal 9 Reisende, höchstens ein Baby pro Erwachsenem.</p>
+              <button type="button" class="pax-done" id="pax-done">Fertig</button>
+            </div>
+          </div>
+
+          <div class="field field-cabin">
+            <label for="cabin">Klasse</label>
+            <select id="cabin">
+              <option value="economy">Economy</option>
+              <option value="premium">Premium Economy</option>
+              <option value="business">Business</option>
+              <option value="first">First</option>
+            </select>
+          </div>
+
+          <button type="submit" class="search-btn">Flüge suchen</button>
+        </div>
+
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+      </form>
+
+      <div class="quick-picks" id="quick-picks">
+        <span>Beliebt:</span>
+        <button type="button" data-from="BER" data-to="PMI">Berlin → Mallorca</button>
+        <button type="button" data-from="FRA" data-to="JFK">Frankfurt → New York</button>
+        <button type="button" data-from="MUC" data-to="BKK">München → Bangkok</button>
+        <button type="button" data-from="HAM" data-to="LIS">Hamburg → Lissabon</button>
+      </div>
+    </div>
+  </section>
+
+  <main class="container results-layout" id="results-section" hidden>
+    <aside class="filters" id="filters" aria-label="Filter">
+      <div class="filters-header">
+        <h2>Filter</h2>
+        <button type="button" class="icon-btn filters-close" id="filters-close" aria-label="Filter schließen">✕</button>
+      </div>
+      <div id="filters-body"></div>
+      <div class="filters-footer">
+        <button type="button" class="btn-secondary" id="filters-reset">Zurücksetzen</button>
+        <button type="button" class="btn-primary filters-apply" id="filters-apply">Ergebnisse anzeigen</button>
+      </div>
+    </aside>
+    <div class="filters-backdrop" id="filters-backdrop" hidden></div>
+
+    <section class="results" aria-labelledby="results-title">
+      <div class="results-head">
+        <div>
+          <h2 id="results-title">Flüge</h2>
+          <p id="results-sub" class="results-sub"></p>
+        </div>
+        <button type="button" class="filters-open-btn" id="filters-open">Filter</button>
+      </div>
+      <div class="sort-tabs" id="sort-tabs" role="tablist" aria-label="Sortieren nach"></div>
+      <div id="results-list" class="results-list" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p id="footer-note">Preise inklusive Steuern und Gebühren für alle Reisenden.</p>
+    </div>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
